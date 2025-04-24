@@ -2,7 +2,8 @@ import {createServer} from "node:http";
 import {runMiddlewareStack} from "./middleware/runner.js";
 
 export class App {
-    constructor(props) {
+    constructor() {
+        this.METHODS_ALLOWED = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
         this.routes = {
             GET: [],
             POST: [],
@@ -10,14 +11,11 @@ export class App {
             PATCH: [],
             DELETE: [],
         };
-
         this.middlewares = [];
     }
 
     #addRoute(method, path, handler, middlewares = []) {
-        const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-
-        if (!METHODS.includes(method.toUpperCase())) {
+        if (!this.METHODS_ALLOWED.includes(method.toUpperCase())) {
             throw new Error(`The method passed ${method} is invalid, allowed methods are: ${METHODS}`);
         }
 
@@ -74,6 +72,7 @@ export class App {
         callback = () => console.log(`Server running at http://${hostname}:${port}/`)) {
         createServer((req, res) => {
             const method = req.method.toUpperCase();
+            const params = {};
             const {pathname} = new URL(`http://localhost${req.url}`);
 
             if (!this.routes[method]) {
@@ -81,12 +80,35 @@ export class App {
                 return;
             }
 
-            for (const route of this.routes[method]) {
-                if (route.path === pathname) {
-                    const stack = [...this.middlewares, ...route.middlewares, route.handler];
-                    runMiddlewareStack(stack, req, res);
-                    return;
+            const splitPathname = pathname.split("/").filter(Boolean);
+
+            const matchRoutes = this.routes[method].find((route) => {
+                let splitRoute = route.path.split("/").filter(Boolean);
+
+                if (splitPathname.length !== splitRoute.length) {
+                    return false;
                 }
+
+                const match = splitRoute.every((split, index) => {
+                    return split === splitPathname[index] || split.startsWith(":");
+                });
+
+                if (match) {
+                    splitRoute.forEach((segment, i) => {
+                        if (segment.startsWith(":")) {
+                            params[segment.slice(1)] = splitPathname[i]
+                        }
+                    });
+                }
+
+                return match;
+            });
+
+            if (matchRoutes) {
+                const stack = [...matchRoutes.middlewares, ...this.middlewares, matchRoutes.handler];
+                req.params = params;
+                runMiddlewareStack(stack, req, res);
+                return
             }
 
             res.writeHead(404, {'Content-Type': 'text/plain'}).end('Not Found');

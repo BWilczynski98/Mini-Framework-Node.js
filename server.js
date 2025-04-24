@@ -23,7 +23,18 @@ app.post("/register", (req, res) => {
 
     res.writeHead(201, {'Content-Type': 'application/json'});
     res.end(JSON.stringify({ message: "User registered!", data: userData }));
-}, [jsonBodyParser])
+}, [jsonBodyParser]);
+
+app.get('/users/:userId/', (req, res) => {
+   const {userId} = req.params;
+   res.end(`User ID: ${userId}`);
+});
+
+app.get('/users/:userId/posts/:postId', (req, res) => {
+    const {userId, postId} = req.params;
+    res.end(`User ID: ${userId}, post ID: ${postId}`);
+});
+
 
 app.use(requestTime);
 
